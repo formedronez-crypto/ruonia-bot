@@ -1,9 +1,9 @@
 name: Daily RUONIA Check
 
 on:
-    - cron: '0 6 * * *'    # Запуск каждый день в 9:00 по московскому времени (6:00 UTC)
-    - cron: ''0 6 * * *''
-  workflow_dispatch:  # Позволяет запускать вручную
+  schedule:
+      - cron: ''0 6 * * *'' # Запуск каждый день в 9:00 по московскому времени (6:00 UTC)
+    workflow_dispatch:  # Позволяет запускать вручную
 
 jobs:
   check-rates:
