@@ -145,10 +145,11 @@ async def check_for_commands():
                         # Отправляем ошибку только если retry не помог
                         await bot.send_message(chat_id=chat_id, text="Ошибка при получении данных о ставках. Попробуйте позже.")
                         print(f"Не удалось получить данные после повторных попыток")
+
+        # Сохраняем ID последнего обработанного сообщения
+            with open('last_update_id.txt', 'w') as f:
+                            f.write(str(update_id))
                 
-                # Сохраняем ID последнего обработанного сообщения
-                with open('last_update_id.txt', 'w') as f:
-                    f.write(str(update_id))
     
     print("Проверка команд завершена")
 
