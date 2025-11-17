@@ -101,8 +101,11 @@ async def check_for_commands():
     data = response.json()
     
     if data.get('ok') and data.get('result'):
+                max_update_id = last_update_id
         for update in data['result']:
             update_id = update['update_id']
+                    if update_id > max_update_id:
+            max_update_id = update_id
             
             if 'message' in update:
                 message = update['message']
@@ -146,11 +149,12 @@ async def check_for_commands():
                         await bot.send_message(chat_id=chat_id, text="Ошибка при получении данных о ставках. Попробуйте позже.")
                         print(f"Не удалось получить данные после повторных попыток")
 
-        # Сохраняем ID последнего обработанного сообщения
-            with open('last_update_id.txt', 'w') as f:
-                            f.write(str(update_id))
                 
-    
+
+
+    # Сохраняем максимальный ID обработанного апдейта
+    with open('last_update_id.txt', 'w') as f:
+        f.write(str(max_update_id))
     print("Проверка команд завершена")
 
 if __name__ == '__main__':
