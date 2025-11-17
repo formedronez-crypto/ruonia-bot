@@ -5,6 +5,9 @@ on:
     - cron: '*/10 * * * *'  # Каждые 10 минут
   workflow_dispatch:  # Ручной запуск
 
+  permissions:
+    contents: write
+
 jobs:
   check-commands:
     runs-on: ubuntu-latest
@@ -31,8 +34,7 @@ jobs:
 
               - name: Save last update ID
                     run: |
-                            git config --global user.name 'github-actions[bot]'
-                                    git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-                                            git add last_update_id.txt
-                                                    git diff --staged --quiet || git commit -m 'Update last_update_id.txt'
-                                                            git push
+                            uses: stefanzweifel/git-auto-commit-action@v5
+                                  with:
+                                          commit_message: 'Update last_update_id.txt'
+                                                  file_pattern: 'last_update_id.txt'
