@@ -101,7 +101,7 @@ async def check_for_commands():
     
     if data.get('ok') and data.get('result'):
                         max_update_id = last_update_id
-                for update in data['result']:
+                    for update in data['result']:
                 update_id = update['update_id']
                         if update_id > max_update_id:
                 max_update_id = update_id
