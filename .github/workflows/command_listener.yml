@@ -28,3 +28,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python command_handler.py
+
+              - name: Save last update ID
+                    run: |
+                            git config --global user.name 'github-actions[bot]'
+                                    git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+                                            git add last_update_id.txt
+                                                    git diff --staged --quiet || git commit -m 'Update last_update_id.txt'
+                                                            git push
