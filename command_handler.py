@@ -20,7 +20,7 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
 def get_ruonia_rate():
     """Получение текущей ставки RUONIA"""
     try:
-        url = 'https://cbr.ru/hd_base/ruonia/'
+        url = 'https://cbr.ru/hd_base/dynamics/'
         response = requests.get(url, timeout=30)
         response.raise_for_status()
         
