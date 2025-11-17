@@ -18,7 +18,6 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     print("Ошибка: Не указаны TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID")
     exit(1)
-
 def get_ruonia_rate(max_retries=2, retry_delay=30):
     """Получение текущей ставки RUONIA с повторными попытками"""
     for attempt in range(max_retries):
