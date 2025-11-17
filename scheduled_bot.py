@@ -6,7 +6,8 @@ import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
 import asyncio
-from datetime import datetime
+from datetime import datetime, date
+import time
 
 # Получаем токен и chat_id из переменных окружения
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -16,90 +17,108 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     print("Ошибка: Не указаны TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID")
     exit(1)
 
-def get_ruonia_rate():
-    """Получение текущей ставки RUONIA"""
-    try:
-        url = 'https://cbr.ru/hd_base/ruonia/dynamics/'
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        table = soup.find('table', class_='data')
-        
-        if table:
-            rows = table.find_all('tr')
-            if len(rows) > 1:
-                cells = rows[1].find_all('td')
-                if len(cells) >= 2:
-                    rate_text = cells[1].get_text(strip=True)
-                    return float(rate_text.replace(',', '.'))
-        return None
-    except Exception as e:
-        print(f"Ошибка при получении RUONIA: {e}")
-        return None
+def get_ruonia_rate(max_retries=2, retry_delay=30):
+    """Получение текущей ставки RUONIA с повторными попытками"""
+    for attempt in range(max_retries):
+        try:
+            url = 'https://cbr.ru/hd_base/ruonia/dynamics/'
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            table = soup.find('table', class_='data')
+            
+            if table:
+                rows = table.find_all('tr')
+                if len(rows) > 1:
+                    cells = rows[1].find_all('td')
+                    if len(cells) >= 2:
+                        rate_str = cells[1].get_text(strip=True)
+                        return float(rate_str.replace(',', '.'))
+            
+            return None
+            
+        except Exception as e:
+            print(f"Ошибка при получении RUONIA (попытка {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                print(f"Повторная попытка через {retry_delay} секунд...")
+                time.sleep(retry_delay)
+            else:
+                return None
+    
+    return None
 
-def get_key_rate():
-    """Получение ключевой ставки ЦБ РФ"""
-    try:
-        url = 'https://cbr.ru/hd_base/KeyRate/'
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        table = soup.find('table', class_='data')
-        
-        if table:
-            rows = table.find_all('tr')
-            if len(rows) > 1:
-                cells = rows[1].find_all('td')
-                if len(cells) >= 2:
-                    rate_text = cells[1].get_text(strip=True)
-                    return float(rate_text.replace(',', '.'))
-        return None
-    except Exception as e:
-        print(f"Ошибка при получении ключевой ставки: {e}")
-        return None
+def get_key_rate(max_retries=2, retry_delay=30):
+    """Получение ключевой ставки ЦБ РФ с повторными попытками"""
+    for attempt in range(max_retries):
+        try:
+            url = 'https://cbr.ru/hd_base/KeyRate/'
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            table = soup.find('table', class_='data')
+            
+            if table:
+                rows = table.find_all('tr')
+                if len(rows) > 1:
+                    cells = rows[1].find_all('td')
+                    if len(cells) >= 2:
+                        rate_column = cells[1].get_text(strip=True)
+                        rate_str = rate_column.split()[0] if rate_column else None
+                        return float(rate_str.replace(',', '.')) if rate_str else None
+            
+            return None
+            
+        except Exception as e:
+            print(f"Ошибка при получении ключевой ставки (попытка {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                print(f"Повторная попытка через {retry_delay} секунд...")
+                time.sleep(retry_delay)
+            else:
+                return None
+    
+    return None
 
 async def send_daily_report():
-    """Отправка ежедневного отчета"""
+    """" Отправка ежедневного отчета """
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     
-    # Получаем ставки
+    # Получаем данные о ставках с retry логикой
     ruonia = get_ruonia_rate()
     key_rate = get_key_rate()
     
-    if ruonia is None or key_rate is None:
-        message = "⚠️ Ошибка получения данных о ставках"
-    else:
-        difference = ruonia - key_rate
-        current_date = datetime.now().strftime('%d.%m.%Y')
+    if ruonia and key_rate:
+        diff = ruonia - key_rate
+        today = datetime.now().strftime('%d.%m.%Y')
         
-        message = f"""
-📈 <b>Ежедневный отчет по ставкам ({current_date})</b>
-
-📊 RUONIA: <b>{ruonia:.2f}%</b>
-🏦 Ключевая ставка ЦБ: <b>{key_rate:.2f}%</b>
-
-🔄 Разница: <b>{difference:+.2f}%</b>
-        """.strip()
-        
-        if difference > 0:
-            message += "\n\nℹ️ RUONIA <b>выше</b> ключевой ставки"
-        elif difference < 0:
-            message += "\n\nℹ️ RUONIA <b>ниже</b> ключевой ставки"
+        # Формируем сообщение
+        if diff > 0:
+            emoji = '✅'
+            comparison = 'RUONIA выше ключевой ставки.'
+        elif diff < 0:
+            emoji = '⚠️'
+            comparison = 'RUONIA ниже ключевой ставки.'
         else:
-            message += "\n\nℹ️ RUONIA <b>равна</b> ключевой ставке"
-    
-    # Отправляем сообщение
-    try:
-        await bot.send_message(
-            chat_id=TELEGRAM_CHAT_ID,
-            text=message,
-            parse_mode='HTML'
-        )
-        print(f"Сообщение успешно отправлено в chat_id: {TELEGRAM_CHAT_ID}")
-    except Exception as e:
-        print(f"Ошибка при отправке сообщения: {e}")
+            emoji = '🔵'
+            comparison = 'RUONIA равна ключевой ставке.'
+        
+        message_text = f"""📊 Ежедневный отчет по ставкам ({today}):
+
+📈 RUONIA: {ruonia:.2f}%
+🏦 Ключевая ставка ЦБ: {key_rate:.2f}%
+
+💡 Разница: {diff:+.2f}%
+
+{emoji} {comparison}"""
+        
+        # Отправляем сообщение
+        await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message_text)
+        print(f"Ежедневный отчет отправлен: RUONIA={ruonia:.2f}%, Ключевая ставка={key_rate:.2f}%, Разница={diff:+.2f}%")
+    else:
+        # Отправляем ошибку только если retry не помог
+        await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text="Ошибка при получении данных о ставках. Попробуйте позже.")
+        print("Не удалось получить данные после повторных попыток")
 
 if __name__ == '__main__':
     asyncio.run(send_daily_report())
