@@ -23,7 +23,7 @@ def get_ruonia_rate(max_retries=2, retry_delay=30):
     for attempt in range(max_retries):
         try:
             url = 'https://cbr.ru/hd_base/ruonia/dynamics/'       
-                        response = requests.get(url, timeout=30)
+                                    response = requests.get(url, timeout=30)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
