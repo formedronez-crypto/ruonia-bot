@@ -5,8 +5,8 @@ on:
     - cron: '*/10 * * * *'  # Каждые 10 минут
   workflow_dispatch:  # Ручной запуск
 
-  permissions:
-    contents: write
+permissions:
+  contents: write
 
 jobs:
   check-commands:
@@ -31,10 +31,9 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python command_handler.py
-
-              - name: Save last update ID
-                    run: |
-                            uses: stefanzweifel/git-auto-commit-action@v5
-                                  with:
-                                          commit_message: 'Update last_update_id.txt'
-                                                  file_pattern: 'last_update_id.txt'
+      
+      - name: Save last update ID
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Update last_update_id.txt'
+          file_pattern: 'last_update_id.txt'
