@@ -2,25 +2,26 @@ name: Daily RUONIA Check
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # Запуск каждый день в 9:00 по московскому времени (6:00 UTC)    workflow_dispatch:  # Позволяет запускать вручную
+    - cron: '0 3 * * *'  # Каждое утро в 8:00 по московскому врем
+      workflow_dispatch: # Позволяет запускать вручную
 
 jobs:
   check-rates:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
-      
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
-        
+
     - name: Install dependencies
       run: |
         pip install -r requirements.txt
-        
+
     - name: Run RUONIA check
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
