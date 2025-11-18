@@ -2,7 +2,7 @@ name: Command Listener
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # Каждые 10 минут
+    - cron: '*/5 * * * *'  # Каждые 5 минут
   workflow_dispatch:  # Ручной запуск
 
 permissions:
