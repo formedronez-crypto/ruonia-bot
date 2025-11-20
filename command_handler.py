@@ -247,7 +247,7 @@ async def check_for_commands():
 {emoji} {comparison}"""
                         
                         await bot.send_message(chat_id=chat_id, text=message_text)
-                           with open('last_update_id.txt', 'w') as f:
+                       with open('last_update_id.txt', 'w') as f:
                             f.write(str(update_id))
                            print(f"Сохранен update_id: {update_id}")
                         print(f"Сообщение отправлено в чат {chat_id}")
