@@ -208,11 +208,9 @@ async def check_for_commands():
     data = response.json()
     
     if data.get('ok') and data.get('result'):
-        max_update_id = last_update_id
         for update in data['result']:
             update_id = update['update_id']
-            if update_id > max_update_id:
-                max_update_id = update_id
+           
             
             if 'message' in update:
                 message = update['message']
@@ -249,9 +247,14 @@ async def check_for_commands():
 {emoji} {comparison}"""
                         
                         await bot.send_message(chat_id=chat_id, text=message_text)
+                           with open('last_update_id.txt', 'w') as f:
+                            f.write(str(update_id))
+                           print(f"Сохранен update_id: {update_id}")
                         print(f"Сообщение отправлено в чат {chat_id}")
                     else:
                         await bot.send_message(chat_id=chat_id, text="Ошибка при получении данных о ставках. Попробуйте позже.")
+                           with open('last_update_id.txt', 'w') as f:
+                            f.write(str(update_id))
                         print(f"Не удалось получить данные после повторных попыток")
                 
                 # Обработка команды /prog
@@ -299,14 +302,15 @@ async def check_for_commands():
 Следующее заседание по ключевой ставке: {next_meeting.strftime('%d.%m.%Y')}"""
                         
                         await bot.send_message(chat_id=chat_id, text=message_text)
+                           with open('last_update_id.txt', 'w') as f:
+                            f.write(str(update_id))
                         print(f"Прогноз отправлен в чат {chat_id}")
                     else:
                         await bot.send_message(chat_id=chat_id, text="Не удалось получить данные для прогноза. Попробуйте позже.")
+                        with open('last_update_id.txt', 'w') as f:
+                         f.write(str(update_id))
         
         # Сохраняем максимальный ID обработанного апдейта
-        with open('last_update_id.txt', 'w') as f:
-            f.write(str(max_update_id))
-    print("Проверка команд завершена")
-
+   
 if __name__ == '__main__':
     asyncio.run(check_for_commands())
