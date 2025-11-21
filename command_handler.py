@@ -1,12 +1,11 @@
-#
-#!usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import os
 import requests
 import re
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Bot
 import asyncio
 import json
@@ -20,8 +19,79 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     print("Ошибка: Не указаны TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID")
     exit(1)
 
+def get_key_rate_from_main_page(max_retries=2, retry_delay=30):
+    """Получение ключевой ставки и даты установления с главной страницы ЦБ"""
+    for attempt in range(max_retries):
+        try:
+            url = 'https://www.cbr.ru/key-indicators/'
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Ищем ключевую ставку и дату
+            key_rate = None
+            key_rate_date = None
+            
+            # Поиск текста "с 27.10.2025" и "16,50%"
+            text = soup.get_text()
+            
+            # Ищем паттерн "с ДД.ММ.ГГГГ"
+            date_match = re.search(r'с\s+(\d{2}\.\d{2}\.\d{4})', text)
+            if date_match:
+                key_rate_date_str = date_match.group(1)
+                key_rate_date = datetime.strptime(key_rate_date_str, '%d.%m.%Y')
+            
+            # Ищем ключевую ставку после даты
+            rate_match = re.search(r'с\s+\d{2}\.\d{2}\.\d{4}\s+([\d,]+)%', text)
+            if rate_match:
+                key_rate = float(rate_match.group(1).replace(',', '.'))
+            
+            if key_rate and key_rate_date:
+                return key_rate, key_rate_date
+            
+            return None, None
+        
+        except Exception as e:
+            print(f"Ошибка при получении ключевой ставки с главной (попытка {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                print(f"Повторная попытка через {retry_delay} секунд...")
+                time.sleep(retry_delay)
+            else:
+                return None, None
+    
+    return None, None
+
+def get_ruonia_rate_from_main_page(max_retries=2, retry_delay=30):
+    """Получение текущей ставки RUONIA с главной страницы"""
+    for attempt in range(max_retries):
+        try:
+            url = 'https://www.cbr.ru/key-indicators/'
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            text = soup.get_text()
+            
+            # Ищем "RUONIA за ДД.ММ.ГГГГ|XX,XX"
+            ruonia_match = re.search(r'RUONIA\s+за\s+\d{2}\.\d{2}\.\d{4}\s+([\d,]+)', text)
+            if ruonia_match:
+                return float(ruonia_match.group(1).replace(',', '.'))
+            
+            return None
+        
+        except Exception as e:
+            print(f"Ошибка при получении RUONIA с главной (попытка {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                print(f"Повторная попытка через {retry_delay} секунд...")
+                time.sleep(retry_delay)
+            else:
+                return None
+    
+    return None
+
 def get_ruonia_rate(max_retries=2, retry_delay=30):
-    """Получение текущей ставки RUONIA с повторными попытками"""
+    """Получение текущей ставки RUONIA со страницы динамики (запасной вариант)"""
     for attempt in range(max_retries):
         try:
             url = 'https://cbr.ru/hd_base/ruonia/dynamics/'
@@ -51,30 +121,43 @@ def get_ruonia_rate(max_retries=2, retry_delay=30):
     
     return None
 
-def get_key_rate(max_retries=2, retry_delay=30):
-    """Получение ключевой ставки ЦБ РФ с повторными попытками"""
+def get_next_meeting_date(max_retries=2, retry_delay=30):
+    """Получение даты следующего заседания по ключевой ставке"""
     for attempt in range(max_retries):
         try:
-            url = 'https://cbr.ru/hd_base/keyrate/'
+            url = 'https://cbr.ru/DKP/cal_mp/'
             response = requests.get(url, timeout=30)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
-            table = soup.find('table', class_='data')
+            today = datetime.now()
             
-            if table:
-                rows = table.find_all('tr')
-                if len(rows) > 1:
-                    cells = rows[1].find_all('td')
-                    if len(cells) >= 2:
-                        rate_column = cells[1].get_text(strip=True)
-                        rate_str = rate_column.split()[0] if rate_column else None
-                        return float(rate_str.replace(',', '.')) if rate_str else None
+            # Ищем все даты заседаний
+            date_elements = soup.find_all('h3')
+            for elem in date_elements:
+                text = elem.get_text(strip=True)
+                # Пытаемся найти дату в формате "DD месяца YYYY года"
+                match = re.search(r'(\d+)\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})', text)
+                if match:
+                    day = int(match.group(1))
+                    month_name = match.group(2)
+                    year = int(match.group(3))
+                    
+                    months = {
+                        'января': 1, 'февраля': 2, 'марта': 3, 'апреля': 4,
+                        'мая': 5, 'июня': 6, 'июля': 7, 'августа': 8,
+                        'сентября': 9, 'октября': 10, 'ноября': 11, 'декабря': 12
+                    }
+                    month = months.get(month_name)
+                    
+                    if month:
+                        meeting_date = datetime(year, month, day)
+                        if meeting_date > today:
+                            return meeting_date
             
             return None
-        
         except Exception as e:
-            print(f"Ошибка при получении ключевой ставки (попытка {attempt + 1}/{max_retries}): {e}")
+            print(f"Ошибка при получении даты следующего заседания (попытка {attempt + 1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
                 print(f"Повторная попытка через {retry_delay} секунд...")
                 time.sleep(retry_delay)
@@ -83,102 +166,50 @@ def get_key_rate(max_retries=2, retry_delay=30):
     
     return None
 
-def get_key_rate_history():
-    """Получение истории изменений ключевой ставки"""
-    try:
-        url = 'https://cbr.ru/hd_base/keyrate/'
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        table = soup.find('table', class_='data')
-        
-        if table:
-            rows = table.find_all('tr')[1:]  # Пропускаем заголовок
-            history = []
-            for row in rows:
-                cells = row.find_all('td')
-                if len(cells) >= 2:
-                    date_str = cells[0].get_text(strip=True)
-                    rate_str = cells[1].get_text(strip=True)
-                    history.append({
-                        'date': datetime.strptime(date_str, '%d.%m.%Y'),
-                        'rate': float(rate_str.replace(',', '.'))
-                    })
-            return history
-        return []
-    except Exception as e:
-        print(f"Ошибка при получении истории ключевой ставки: {e}")
-        return []
-
-def get_ruonia_history(start_date, end_date):
-    """Получение истории RUONIA за период"""
-    try:
-        url = 'https://cbr.ru/hd_base/ruonia/dynamics/'
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        table = soup.find('table', class_='data')
-        
-        if table:
-            rows = table.find_all('tr')[1:]  # Пропускаем заголовок
-            history = []
-            for row in rows:
-                cells = row.find_all('td')
-                if len(cells) >= 2:
-                    date_str = cells[0].get_text(strip=True)
-                    rate_str = cells[1].get_text(strip=True)
-                    date = datetime.strptime(date_str, '%d.%m.%Y')
-                    
-                    if start_date <= date <= end_date:
-                        history.append({
-                            'date': date,
-                            'rate': float(rate_str.replace(',', '.'))
-                        })
-            return history
-        return []
-    except Exception as e:
-        print(f"Ошибка при получении истории RUONIA: {e}")
-        return []
-
-def get_next_meeting_date():
-    """Получение даты следующего заседания по ключевой ставке"""
-    try:
-        url = 'https://cbr.ru/DKP/cal_mp/'
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        today = datetime.now()
-        
-        # Ищем все даты заседаний
-        date_elements = soup.find_all('h3')
-        for elem in date_elements:
-            text = elem.get_text(strip=True)
-            # Пытаемся найти дату в формате "DD месяца YYYY года"
-            match = re.search(r'(\d+)\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})', text)
-            if match:
-                day = int(match.group(1))
-                month_name = match.group(2)
-                year = int(match.group(3))
-                
-                months = {
-                    'января': 1, 'февраля': 2, 'марта': 3, 'апреля': 4,
-                    'мая': 5, 'июня': 6, 'июля': 7, 'августа': 8,
-                    'сентября': 9, 'октября': 10, 'ноября': 11, 'декабря': 12
-                }
-                month = months.get(month_name)
-                
-                if month:
-                    meeting_date = datetime(year, month, day)
-                    if meeting_date > today:
-                        return meeting_date
-        
-        return None
-    except Exception as e:
-        print(f"Ошибка при получении даты следующего заседания: {e}")
-        return None
+def get_ruonia_history_parametrized(start_date, end_date, max_retries=2, retry_delay=30):
+    """Получение истории RUONIA за период с использованием параметров в URL"""
+    for attempt in range(max_retries):
+        try:
+            # Форматируем даты в формат ДД.ММ.ГГГГ для URL
+            start_str = start_date.strftime('%d.%m.%Y')
+            end_str = end_date.strftime('%d.%m.%Y')
+            
+            url = f'https://cbr.ru/hd_base/ruonia/dynamics/?UniDbQuery.Posted=True&UniDbQuery.From={start_str}&UniDbQuery.To={end_str}'
+            
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            table = soup.find('table', class_='data')
+            
+            if table:
+                rows = table.find_all('tr')[1:]  # Пропускаем заголовок
+                history = []
+                for row in rows:
+                    cells = row.find_all('td')
+                    if len(cells) >= 2:
+                        date_str = cells[0].get_text(strip=True)
+                        rate_str = cells[1].get_text(strip=True)
+                        try:
+                            date = datetime.strptime(date_str, '%d.%m.%Y')
+                            rate = float(rate_str.replace(',', '.'))
+                            history.append({
+                                'date': date,
+                                'rate': rate
+                            })
+                        except ValueError:
+                            continue
+                return history
+            return []
+        except Exception as e:
+            print(f"Ошибка при получении истории RUONIA (попытка {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                print(f"Повторная попытка через {retry_delay} секунд...")
+                time.sleep(retry_delay)
+            else:
+                return []
+    
+    return []
 
 def calculate_average_diff(ruonia_history, key_rate):
     """Расчет средней разницы между RUONIA и ключевой ставкой"""
@@ -210,7 +241,6 @@ async def check_for_commands():
     if data.get('ok') and data.get('result'):
         for update in data['result']:
             update_id = update['update_id']
-           
             
             if 'message' in update:
                 message = update['message']
@@ -221,9 +251,13 @@ async def check_for_commands():
                 if text.strip().lower() in ['/check', '/проверить']:
                     print(f"Получена команда {text} от {chat_id}")
                     
-                    # Получаем данные о ставках с retry логикой
-                    ruonia = get_ruonia_rate()
-                    key_rate = get_key_rate()
+                    # Сначала пробуем получить с главной страницы
+                    ruonia = get_ruonia_rate_from_main_page()
+                    key_rate, _ = get_key_rate_from_main_page()
+                    
+                    # Если не получилось, пробуем старый метод
+                    if not ruonia:
+                        ruonia = get_ruonia_rate()
                     
                     if ruonia and key_rate:
                         diff = ruonia - key_rate
@@ -261,29 +295,24 @@ async def check_for_commands():
                 elif text.strip().lower() in ['/prog', '/прогноз']:
                     print(f"Получена команда {text} от {chat_id}")
                     
-                    # Получаем историю ключевой ставки
-                    key_rate_history = get_key_rate_history()
+                    # Получаем ключевую ставку и дату установления с главной страницы
+                    current_key_rate, last_change_date = get_key_rate_from_main_page()
                     
-                    if not key_rate_history or len(key_rate_history) < 2:
-                        await bot.send_message(chat_id=chat_id, text="Не удалось получить данные об истории ключевой ставки.")
+                    if not current_key_rate or not last_change_date:
+                        await bot.send_message(chat_id=chat_id, text="Не удалось получить данные о ключевой ставке.")
+                        with open('last_update_id.txt', 'w') as f:
+                            f.write(str(update_id))
                         continue
-                    
-                    # Текущая ключевая ставка
-                    current_key_rate = key_rate_history[0]['rate']
-                    
-                    # Дата последнего изменения (когда ставка была другой)
-                    last_change_date = None
-                    for i in range(1, len(key_rate_history)):
-                        if key_rate_history[i]['rate'] != current_key_rate:
-                            last_change_date = key_rate_history[i-1]['date']
-                            break
-                    
-                    if not last_change_date:
-                        last_change_date = key_rate_history[-1]['date']
                     
                     # Получаем историю RUONIA с момента последнего изменения
                     today = datetime.now()
-                    ruonia_history = get_ruonia_history(last_change_date, today)
+                    ruonia_history = get_ruonia_history_parametrized(last_change_date, today)
+                    
+                    if not ruonia_history:
+                        await bot.send_message(chat_id=chat_id, text="Не удалось получить историю RUONIA. Попробуйте позже.")
+                        with open('last_update_id.txt', 'w') as f:
+                            f.write(str(update_id))
+                        continue
                     
                     # Рассчитываем среднюю разницу
                     avg_diff = calculate_average_diff(ruonia_history, current_key_rate)
@@ -291,7 +320,7 @@ async def check_for_commands():
                     # Получаем дату следующего заседания
                     next_meeting = get_next_meeting_date()
                     
-                    if avg_diff is not None and next_meeting:
+                    if avg_diff is not None:
                         # Форматируем сообщение
                         comparison = "ниже" if avg_diff < 0 else "выше"
                         
@@ -299,18 +328,19 @@ async def check_for_commands():
 
 С последнего изменения ключевой ставки от {last_change_date.strftime('%d.%m.%Y')} до {today.strftime('%d.%m.%Y')} ставка RUONIA была в среднем на {abs(avg_diff):.2f}% {comparison}, чем ключевая ставка.
 
-Следующее заседание по ключевой ставке: {next_meeting.strftime('%d.%m.%Y')}"""
+Количество торговых дней в анализе: {len(ruonia_history)}"""
+                        
+                        if next_meeting:
+                            message_text += f"\n\nСледующее заседание по ключевой ставке: {next_meeting.strftime('%d.%m.%Y')}"
                         
                         await bot.send_message(chat_id=chat_id, text=message_text)
                         with open('last_update_id.txt', 'w') as f:
                             f.write(str(update_id))
                         print(f"Прогноз отправлен в чат {chat_id}")
                     else:
-                        await bot.send_message(chat_id=chat_id, text="Не удалось получить данные для прогноза. Попробуйте позже.")
+                        await bot.send_message(chat_id=chat_id, text="Не удалось рассчитать прогноз. Попробуйте позже.")
                         with open('last_update_id.txt', 'w') as f:
                             f.write(str(update_id))
-        
-        # Сохраняем максимальный ID обработанного апдейта
-   
+
 if __name__ == '__main__':
     asyncio.run(check_for_commands())
