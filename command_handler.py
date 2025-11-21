@@ -251,9 +251,9 @@ async def check_for_commands():
                 if text.strip().lower() in ['/check', '/проверить']:
                     print(f"Получена команда {text} от {chat_id}")
                     
-                    # Сначала пробуем получить с главной страницы
+                    # Получаем текущие данные
                     ruonia = get_ruonia_rate_from_main_page()
-                    key_rate, _ = get_key_rate_from_main_page()
+                    key_rate, key_rate_date = get_key_rate_from_main_page()
                     
                     # Если не получилось, пробуем старый метод
                     if not ruonia:
@@ -261,9 +261,10 @@ async def check_for_commands():
                     
                     if ruonia and key_rate:
                         diff = ruonia - key_rate
-                        today = datetime.now().strftime('%d.%m.%Y')
+                        today = datetime.now()
+                        today_str = today.strftime('%d.%m.%Y')
                         
-                        # Формируем сообщение
+                        # Формируем базовое сообщение
                         if diff > 0:
                             emoji = '✅'
                             comparison = 'RUONIA выше ключевой ставки.'
@@ -274,11 +275,38 @@ async def check_for_commands():
                             emoji = '🔵'
                             comparison = 'RUONIA равна ключевой ставке.'
                         
-                        message_text = f"""📊 Ежедневный отчет по ставкам {today}:
+                        message_text = f"""📊 Ежедневный отчет по ставкам {today_str}:
+
 📈 RUONIA: {ruonia:.2f}%
 🏦 Ключевая ставка ЦБ: {key_rate:.2f}%
-💡 Разница: {diff:+.2f}%
+💡 Разница сегодня: {diff:+.2f}%
 {emoji} {comparison}"""
+                        
+                        # Добавляем статистику с последнего заседания
+                        if key_rate_date:
+                            ruonia_history = get_ruonia_history_parametrized(key_rate_date, today)
+                            
+                            if ruonia_history:
+                                avg_diff = calculate_average_diff(ruonia_history, key_rate)
+                                
+                                if avg_diff is not None:
+                                    comparison_avg = "ниже" if avg_diff < 0 else "выше"
+                                    days_count = len(ruonia_history)
+                                    
+                                    message_text += f"""
+
+📅 Статистика с {key_rate_date.strftime('%d.%m.%Y')}:
+📊 Средняя разница: {abs(avg_diff):.2f}% {comparison_avg}
+📆 Торговых дней: {days_count}"""
+                        
+                        # Добавляем дату следующего заседания
+                        next_meeting = get_next_meeting_date()
+                        if next_meeting:
+                            days_until = (next_meeting - today).days
+                            message_text += f"""
+
+🗓 Следующее заседание: {next_meeting.strftime('%d.%m.%Y')}
+⏳ Осталось дней: {days_until}"""
                         
                         await bot.send_message(chat_id=chat_id, text=message_text)
                         with open('last_update_id.txt', 'w') as f:
@@ -331,7 +359,9 @@ async def check_for_commands():
 Количество торговых дней в анализе: {len(ruonia_history)}"""
                         
                         if next_meeting:
+                            days_until = (next_meeting - today).days
                             message_text += f"\n\nСледующее заседание по ключевой ставке: {next_meeting.strftime('%d.%m.%Y')}"
+                            message_text += f"\nОсталось дней до заседания: {days_until}"
                         
                         await bot.send_message(chat_id=chat_id, text=message_text)
                         with open('last_update_id.txt', 'w') as f:
