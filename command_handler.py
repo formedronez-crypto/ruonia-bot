@@ -291,19 +291,15 @@ async def check_for_commands():
                     # Получаем дату следующего заседания
                     next_meeting = get_next_meeting_date()
                     
-                    if avg_diff is not None:
+                    if avg_diff is not None and next_meeting:
                         # Форматируем сообщение
                         comparison = "ниже" if avg_diff < 0 else "выше"
                         
                         message_text = f"""📊 Прогноз и статистика:
 
-С последнего изменения ключевой ставки от {last_change_date.strftime('%d.%m.%Y')} до {today.strftime('%d.%m.%Y')} ставка RUONIA была в среднем на {abs(avg_diff):.2f}% {comparison}, чем ключевая ставка."""
-                                            
-                    if next_meeting:
-                        message_text += f"\n\nСледующее заседание по ключевой ставке: {next_meeting.strftime('%d.%m.%Y')}"
-                    else:
-                        message_text += "\n\nДата следующего заседания пока не определена."
+С последнего изменения ключевой ставки от {last_change_date.strftime('%d.%m.%Y')} до {today.strftime('%d.%m.%Y')} ставка RUONIA была в среднем на {abs(avg_diff):.2f}% {comparison}, чем ключевая ставка.
 
+Следующее заседание по ключевой ставке: {next_meeting.strftime('%d.%m.%Y')}"""
                         
                         await bot.send_message(chat_id=chat_id, text=message_text)
                         with open('last_update_id.txt', 'w') as f:
