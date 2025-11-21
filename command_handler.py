@@ -254,7 +254,7 @@ async def check_for_commands():
                     else:
                         await bot.send_message(chat_id=chat_id, text="Ошибка при получении данных о ставках. Попробуйте позже.")
                         with open('last_update_id.txt', 'w') as f:
-                        f.write(str(update_id))
+                            f.write(str(update_id))
                         print("Не удалось получить данные после повторных попыток")
 
                 # Обработка команды /prog
