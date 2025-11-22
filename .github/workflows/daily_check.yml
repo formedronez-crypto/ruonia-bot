@@ -2,8 +2,8 @@ name: Daily RUONIA Check
 
 on:
   schedule:
-    - cron: '0 5 * * *'  # Каждое утро в 8+2:00 по московскому врем
-      workflow_dispatch: # Позволяет запускать вручную
+    - cron: '0 3 * * *'  # Каждое утро в 8:00 по московскому времени (UTC+3)
+  workflow_dispatch:  # ← ИСПРАВЛЕНО: добавлено двоеточие
 
 jobs:
   check-rates:
