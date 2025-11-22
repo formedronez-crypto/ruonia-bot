@@ -240,7 +240,7 @@ async def send_daily_report():
     
     # Добавляем статистику
     if avg_diff is not None and ruonia_history:
-        message_text += f"\n🔢 Средняя разница с {key_rate_date.strftime('%d.%m.%Y')} {avg_diff:.2f}% "
+        message_text += f"\n🔢 Средняя разница с {key_rate_date.strftime('%d.%m.%Y')} на {avg_diff:.2f}% "
         message_text += "ниже\n" if avg_diff < 0 else "выше\n"
         # Используем реальное количество торговых дней из истории
         message_text += f"🔴 Количество торговых дней в анализе: {len(ruonia_history)}\n"
