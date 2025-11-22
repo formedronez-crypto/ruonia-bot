@@ -163,6 +163,12 @@ def get_ruonia_history_parametrized(start_date, end_date, max_retries=2, retry_d
                             })
                         except ValueError:
                             continue
+                
+                # Подсчитываем только реальные торговые дни из истории
+                print(f"📊 Получено {len(history)} торговых дней из истории RUONIA")
+                for entry in history[:5]:  # Выводим первые 5 для проверки
+                    print(f"  {entry['date'].strftime('%d.%m.%Y')} ({entry['date'].strftime('%A')}): {entry['rate']:.2f}%")
+                
                 return history
             return []
         except Exception as e:
@@ -222,11 +228,11 @@ async def send_daily_report():
     if avg_diff is not None and ruonia_history:
         message_text += f"\n🔢 Средняя разница с {key_rate_date.strftime('%d.%m.%Y')} {avg_diff:.2f}% "
         message_text += "ниже\n" if avg_diff < 0 else "выше\n"
+        # Используем реальное количество торговых дней из истории
         message_text += f"🔴 Количество торговых дней в анализе: {len(ruonia_history)}\n"
     
     # Добавляем дату следующего заседания
     if next_meeting:
-        days_until = (next_meeting - today).days
         message_text += f"📆 Следующее заседание по ключевой ставке: {next_meeting.strftime('%d.%m.%Y')}\n"
     
     # Добавляем статус
@@ -247,6 +253,7 @@ async def send_daily_report():
     # Отправляем сообщение
     await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message_text)
     print(f"Ежедневный отчет отправлен: RUONIA={ruonia:.2f}%, Ключевая ставка={key_rate:.2f}%, Разница={diff:+.2f}%")
+    print(f"Торговых дней: {len(ruonia_history) if ruonia_history else 0}")
 
 if __name__ == '__main__':
     asyncio.run(send_daily_report())
