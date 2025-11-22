@@ -98,11 +98,14 @@ def get_next_meeting_date(max_retries=2, retry_delay=30):
             soup = BeautifulSoup(response.content, 'html.parser')
             today = datetime.now()
             
-            # Ищем все даты заседаний
-            date_elements = soup.find_all('h3')
+            # Ищем все даты заседаний — ищем в h3 и в тексте страницы
+            date_elements = soup.find_all(['h3', 'p', 'div'])
+            meeting_dates = []
+            
             for elem in date_elements:
                 text = elem.get_text(strip=True)
-                match = re.search(r'(\d+)\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})', text)
+                # Ищем даты в формате "19 декабря 2025 года" или "19 декабря 2025"
+                match = re.search(r'(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})(?:\s+года)?', text)
                 if match:
                     day = int(match.group(1))
                     month_name = match.group(2)
@@ -116,13 +119,24 @@ def get_next_meeting_date(max_retries=2, retry_delay=30):
                     month = months.get(month_name)
                     
                     if month:
-                        meeting_date = datetime(year, month, day)
-                        if meeting_date > today:
-                            return meeting_date
+                        try:
+                            meeting_date = datetime(year, month, day)
+                            if meeting_date > today:
+                                meeting_dates.append(meeting_date)
+                                print(f"✅ Найдено заседание: {meeting_date.strftime('%d.%m.%Y')}")
+                        except ValueError:
+                            continue
             
+            # Возвращаем ближайшую дату
+            if meeting_dates:
+                next_meeting = min(meeting_dates)
+                print(f"📅 Ближайшее заседание: {next_meeting.strftime('%d.%m.%Y')}")
+                return next_meeting
+            
+            print("❌ Не найдено будущих заседаний")
             return None
         except Exception as e:
-            print(f"Ошибка при получении даты следующего заседания (попытка {attempt + 1}/{max_retries}): {e}")
+            print(f"❌ Ошибка при получении даты следующего заседания (попытка {attempt + 1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
                 print(f"Повторная попытка через {retry_delay} секунд...")
                 time.sleep(retry_delay)
@@ -231,9 +245,11 @@ async def send_daily_report():
         # Используем реальное количество торговых дней из истории
         message_text += f"🔴 Количество торговых дней в анализе: {len(ruonia_history)}\n"
     
-    # Добавляем дату следующего заседания
+    # Добавляем дату следующего заседания (ИСПРАВЛЕНО!)
     if next_meeting:
+        days_until = (next_meeting - today).days
         message_text += f"📆 Следующее заседание по ключевой ставке: {next_meeting.strftime('%d.%m.%Y')}\n"
+        message_text += f"⏳ Осталось дней: {days_until}\n"
     
     # Добавляем статус
     if diff < 0 and avg_diff is not None and avg_diff < 0:
